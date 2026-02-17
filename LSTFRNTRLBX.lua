@@ -2,18 +2,7 @@ local SCRIPT_NAME = "RHub - Lost Front"
 local SCRIPT_VERSION = "LF Edition v1"
 
 local DESCRIPTION_TEXT = [[
-Lost Front Special Edition.
-Tabs:
-- Lost Front: Aimbot & Target Selector
-- ESP: Team based ESPs and Health
-
-Features:
-- All Team ESP: Highlights everyone Red
-- Red Team ESP: Highlights enemies in Red folder
-- Blue Team ESP: Highlights enemies in Blue folder
-- Health ESP: Bars above heads
-
-Made by: @zawarka_lol
+No description yet.
 ]]
 
 local Players = game:GetService("Players")
@@ -29,12 +18,7 @@ local Camera = workspace.CurrentCamera
 local Connections = {}
 
 local Whitelist = {
-    ["dimakrutii93"] = true,
-    ["QwERsSa00"] = true,
-    ["Dani_l17"] = true,
-    ["AndreyVin2010"] = true,
-    ["F608_71"] = true,
-    ["reriti123_1"] = true
+    ["zawarka_lol"] = true
 }
 
 local aimbotEnabled = false
