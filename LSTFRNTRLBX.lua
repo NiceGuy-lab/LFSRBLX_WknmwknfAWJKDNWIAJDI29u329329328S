@@ -29,7 +29,8 @@ local _G_State = {
 	Aimbot_TargetEnemies = true,
 	Aimbot_TargetTeam = false,
 	Aimbot_TargetFPV = false,
-	Aimbot_DropOffset = 0,
+	Aimbot_Crosshair = nil,
+	Calibrating = false,
 	WarningAccepted = false
 }
 
@@ -37,6 +38,7 @@ local ESP_Highlights = {}
 local FPV_Highlights = {}
 local Connections = {}
 local Aimbot_ToggledOn = false
+local CalibrateBtnRef = nil
 
 local CachedMainFolder = nil
 local CachedMyTeamFolder = nil
@@ -362,6 +364,8 @@ function UIUtils.CreateButton(parent, text, callback)
 		task.wait(0.1)
 		TweenService:Create(Button, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(40, 40, 40)}):Play()
 	end)
+	
+	return Button
 end
 
 function UIUtils.CreateToggle(parent, text, default, callback)
@@ -393,66 +397,6 @@ function UIUtils.CreateToggle(parent, text, default, callback)
 		state = not state
 		TweenService:Create(Button, TweenInfo.new(0.2), {BackgroundColor3 = state and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(50, 50, 50)}):Play()
 		callback(state)
-	end)
-end
-
-function UIUtils.CreateSlider(parent, text, min, max, defaultVal, callback)
-	local Frame = Instance.new("Frame")
-	Frame.Size = UDim2.new(1, 0, 0, 45)
-	Frame.BackgroundTransparency = 1
-	Frame.Parent = parent
-	
-	local Label = Instance.new("TextLabel")
-	Label.Size = UDim2.new(1, -10, 0, 20)
-	Label.Position = UDim2.new(0, 5, 0, 0)
-	Label.BackgroundTransparency = 1
-	Label.Text = text .. ": " .. tostring(defaultVal)
-	Label.TextColor3 = Color3.fromRGB(200, 200, 200)
-	Label.Font = Enum.Font.Gotham
-	Label.TextSize = 13
-	Label.TextXAlignment = Enum.TextXAlignment.Left
-	Label.Parent = Frame
-	
-	local SliderBg = Instance.new("Frame")
-	SliderBg.Size = UDim2.new(1, -10, 0, 12)
-	SliderBg.Position = UDim2.new(0, 5, 0, 25)
-	SliderBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-	AddUICorner(SliderBg, 6)
-	SliderBg.Parent = Frame
-	
-	local Fill = Instance.new("Frame")
-	local defPct = math.clamp((defaultVal - min) / (max - min), 0, 1)
-	Fill.Size = UDim2.new(defPct, 0, 1, 0)
-	Fill.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-	AddUICorner(Fill, 6)
-	Fill.Parent = SliderBg
-	
-	local dragging = false
-	
-	local function updateSlider(input)
-		local pos = math.clamp((input.Position.X - SliderBg.AbsolutePosition.X) / SliderBg.AbsoluteSize.X, 0, 1)
-		Fill.Size = UDim2.new(pos, 0, 1, 0)
-		local val = min + (max - min) * pos
-		val = math.floor(val * 10) / 10
-		Label.Text = text .. ": " .. tostring(val)
-		callback(val)
-	end
-	
-	SliderBg.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = true
-			updateSlider(input)
-		end
-	end)
-	UserInputService.InputChanged:Connect(function(input)
-		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-			updateSlider(input)
-		end
-	end)
-	UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = false
-		end
 	end)
 end
 
@@ -643,7 +587,6 @@ WarningGui.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 WarningGui.BorderSizePixel = 0
 WarningGui.Visible = false
 WarningGui.Active = true
-WarningGui.Draggable = true
 AddUICorner(WarningGui, 10)
 WarningGui.Parent = ScreenGui
 
@@ -729,6 +672,25 @@ end)
 
 local aimSet = UIUtils.CreateMinitab(MainPage, "AIMBOT Settings")
 
+CalibrateBtnRef = UIUtils.CreateButton(aimSet, "Set Custom Crosshair", function()
+	if not _G_State.Calibrating then
+		_G_State.Calibrating = true
+		if CalibrateBtnRef then
+			CalibrateBtnRef.Text = "Waiting for Click..."
+			CalibrateBtnRef.TextColor3 = Color3.fromRGB(255, 255, 0)
+		end
+	end
+end)
+
+UIUtils.CreateButton(aimSet, "Reset Crosshair", function()
+	_G_State.Aimbot_Crosshair = nil
+	_G_State.Calibrating = false
+	if CalibrateBtnRef then
+		CalibrateBtnRef.Text = "Set Custom Crosshair"
+		CalibrateBtnRef.TextColor3 = Color3.fromRGB(200, 200, 200)
+	end
+end)
+
 UIUtils.CreateDropdown(aimSet, "Aim Key", {"RightMouse", "LeftMouse"}, "RightMouse", function(v)
 	if v == "RightMouse" then _G_State.Aimbot_Key = Enum.UserInputType.MouseButton2
 	else _G_State.Aimbot_Key = Enum.UserInputType.MouseButton1 end
@@ -741,10 +703,6 @@ end)
 
 UIUtils.CreateDropdown(aimSet, "Target Part", {"Head", "Torso"}, "Head", function(v)
 	_G_State.Aimbot_TargetPart = v
-end)
-
-UIUtils.CreateSlider(aimSet, "Distance Drop Offset", -10, 10, 0, function(v)
-	_G_State.Aimbot_DropOffset = v
 end)
 
 UIUtils.CreateToggle(aimSet, "Target Enemies", _G_State.Aimbot_TargetEnemies, function(v) _G_State.Aimbot_TargetEnemies = v end)
@@ -893,6 +851,8 @@ local function GetClosestTarget()
 		end
 	end
 	
+	local refPoint = _G_State.Aimbot_Crosshair or Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+	
 	for char, _ in pairs(validPlayerTargets) do
 		local hum = char:FindFirstChild("Humanoid") or char:FindFirstChildWhichIsA("Humanoid")
 		if hum and hum.Health > 0 then
@@ -908,9 +868,8 @@ local function GetClosestTarget()
 					local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
 					
 					if onScreen then
-						local mousePos = Vector2.new(Mouse.X, Mouse.Y)
 						local partPos2D = Vector2.new(pos.X, pos.Y)
-						local dist = (mousePos - partPos2D).Magnitude
+						local dist = (refPoint - partPos2D).Magnitude
 						
 						if dist < closestDist then
 							closestDist = dist
@@ -930,9 +889,8 @@ local function GetClosestTarget()
 				local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
 				
 				if onScreen then
-					local mousePos = Vector2.new(Mouse.X, Mouse.Y)
 					local partPos2D = Vector2.new(pos.X, pos.Y)
-					local dist = (mousePos - partPos2D).Magnitude
+					local dist = (refPoint - partPos2D).Magnitude
 					
 					if dist < closestDist then
 						closestDist = dist
@@ -948,6 +906,18 @@ local function GetClosestTarget()
 end
 
 local aimbotActive = false
+
+Connections.CalibrateClick = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if _G_State.Calibrating and input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if gameProcessed then return end
+		_G_State.Aimbot_Crosshair = Vector2.new(input.Position.X, input.Position.Y)
+		_G_State.Calibrating = false
+		if CalibrateBtnRef then
+			CalibrateBtnRef.Text = "Set Custom Crosshair"
+			CalibrateBtnRef.TextColor3 = Color3.fromRGB(200, 200, 200)
+		end
+	end
+end)
 
 Connections.AimInputBegan = UserInputService.InputBegan:Connect(function(input)
 	if not _G_State.Aimbot_Enabled or not _G_State.WarningAccepted then return end
@@ -975,19 +945,15 @@ Connections.Aimbot_Loop = RunService.RenderStepped:Connect(function()
 	if _G_State.Aimbot_Enabled and _G_State.WarningAccepted and aimbotActive then
 		local targetPart = GetClosestTarget()
 		if targetPart then
-			local distToTarget = (Camera.CFrame.Position - targetPart.Position).Magnitude
-			local offsetScale = (distToTarget * _G_State.Aimbot_DropOffset * 0.01)
-			local aimPos = targetPart.Position - Vector3.new(0, offsetScale, 0)
-			
-			local pos, onScreen = Camera:WorldToViewportPoint(aimPos)
+			local pos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
 			if onScreen then
+				local center = _G_State.Aimbot_Crosshair or Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 				if type(mousemoverel) == "function" then
-					local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 					local deltaX = pos.X - center.X
 					local deltaY = pos.Y - center.Y
 					mousemoverel(deltaX * 0.4, deltaY * 0.4)
 				else
-					Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, aimPos)
+					Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPart.Position)
 				end
 			end
 		end
