@@ -177,8 +177,6 @@ MainFrame.Size = UDim2.new(0, 550, 0, 350)
 MainFrame.Position = UDim2.new(0.5, -275, 0.5, -175)
 MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 MainFrame.BorderSizePixel = 0
-MainFrame.Active = true
-MainFrame.Draggable = true
 AddUICorner(MainFrame, 8)
 MainFrame.Parent = ScreenGui
 
@@ -196,6 +194,34 @@ TopBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 TopBar.BorderSizePixel = 0
 AddUICorner(TopBar, 8)
 TopBar.Parent = MainFrame
+
+local draggingMenu = false
+local dragStartPos
+local startFramePos
+
+TopBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		draggingMenu = true
+		dragStartPos = input.Position
+		startFramePos = MainFrame.Position
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if draggingMenu and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local delta = input.Position - dragStartPos
+		MainFrame.Position = UDim2.new(
+			startFramePos.X.Scale, startFramePos.X.Offset + delta.X,
+			startFramePos.Y.Scale, startFramePos.Y.Offset + delta.Y
+		)
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		draggingMenu = false
+	end
+end)
 
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -40, 1, 0)
