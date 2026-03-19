@@ -1,3 +1,4 @@
+local MENU_TITLE = "Lost Front C-Menu"
 local TARGET_FRIENDLY_NAME = "poopfullx"
 local MENU_TOGGLE_KEY = Enum.KeyCode.Insert
 
@@ -76,18 +77,18 @@ local function DestroyEverything()
 	ClearHighlightList(ESP_Highlights)
 	ClearHighlightList(FPV_Highlights)
 	
-	local gui = CoreGui:FindFirstChild("ProjectMenuGui")
+	local targetUIFolder = (type(gethui) == "function" and gethui()) or LocalPlayer:WaitForChild("PlayerGui")
+	local gui = targetUIFolder:FindFirstChild("ProjectMenuGui")
 	if gui then gui:Destroy() end
-	
-	script:Destroy()
 end
 
+local targetUIFolder = (type(gethui) == "function" and gethui()) or LocalPlayer:WaitForChild("PlayerGui")
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "ProjectMenuGui"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.DisplayOrder = 999999
-ScreenGui.Parent = CoreGui
+ScreenGui.Parent = targetUIFolder
 
 local function AddUICorner(parent, radius)
 	local corner = Instance.new("UICorner")
@@ -126,7 +127,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -40, 1, 0)
 TitleLabel.Position = UDim2.new(0, 10, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "Project Menu | v1.0 | Internal"
+TitleLabel.Text = MENU_TITLE
 TitleLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Font = Enum.Font.GothamBold
@@ -557,7 +558,7 @@ local function ApplyHighlight(obj, isPlayerESP, isFriendly)
 		hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 		hl.FillTransparency = 0.5
 		hl.OutlineTransparency = 0
-		hl.Parent = CoreGui
+		hl.Parent = obj -- Теперь обводка лежит прямо внутри объекта для большей безопасности
 		storage[obj] = hl
 	end
 	
