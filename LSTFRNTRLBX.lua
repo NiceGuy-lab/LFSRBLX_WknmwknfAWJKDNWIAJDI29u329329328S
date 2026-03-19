@@ -907,9 +907,8 @@ end
 
 local aimbotActive = false
 
-Connections.CalibrateClick = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+Connections.CalibrateClick = UserInputService.InputBegan:Connect(function(input)
 	if _G_State.Calibrating and input.UserInputType == Enum.UserInputType.MouseButton1 then
-		if gameProcessed then return end
 		_G_State.Aimbot_Crosshair = Vector2.new(input.Position.X, input.Position.Y)
 		_G_State.Calibrating = false
 		if CalibrateBtnRef then
@@ -964,7 +963,7 @@ CloseBtn.MouseButton1Click:Connect(function()
 	DestroyEverything()
 end)
 
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
+UserInputService.InputBegan:Connect(function(input)
 	if input.KeyCode == MENU_TOGGLE_KEY then
 		_G_State.MenuVisible = not _G_State.MenuVisible
 		MainFrame.Visible = _G_State.MenuVisible
