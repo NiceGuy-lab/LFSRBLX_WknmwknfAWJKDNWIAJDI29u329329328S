@@ -200,7 +200,8 @@ function UIUtils.CreateTab(name, layoutOrder)
 	Page.BackgroundTransparency = 1
 	Page.Visible = false
 	Page.CanvasSize = UDim2.new(0, 0, 0, 0)
-	Page.ScrollBarThickness = 2
+	Page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	Page.ScrollBarThickness = 4
 	Page.Parent = PagesFolder
 	
 	local list = Instance.new("UIListLayout")
@@ -277,16 +278,16 @@ function UIUtils.CreateMinitab(parent, text)
 	AddUICorner(Frame, 4)
 	Frame.Parent = parent
 	
-	local Label = Instance.new("TextLabel")
-	Label.Size = UDim2.new(1, 0, 1, 0)
-	Label.Position = UDim2.new(0, 5, 0, 0)
-	Label.BackgroundTransparency = 1
-	Label.Text = ":: " .. text
-	Label.TextColor3 = Color3.fromRGB(180, 180, 180)
-	Label.Font = Enum.Font.GothamBold
-	Label.TextSize = 12
-	Label.TextXAlignment = Enum.TextXAlignment.Left
-	Label.Parent = Frame
+	local Button = Instance.new("TextButton")
+	Button.Size = UDim2.new(1, 0, 1, 0)
+	Button.Position = UDim2.new(0, 5, 0, 0)
+	Button.BackgroundTransparency = 1
+	Button.Text = "[-]  " .. text
+	Button.TextColor3 = Color3.fromRGB(180, 180, 180)
+	Button.Font = Enum.Font.GothamBold
+	Button.TextSize = 12
+	Button.TextXAlignment = Enum.TextXAlignment.Left
+	Button.Parent = Frame
 	
 	local Container = Instance.new("Frame")
 	Container.Name = text .. "_Container"
@@ -302,6 +303,17 @@ function UIUtils.CreateMinitab(parent, text)
 	local pad = Instance.new("UIPadding")
 	pad.PaddingLeft = UDim.new(0, 10)
 	pad.Parent = Container
+	
+	local expanded = true
+	Button.MouseButton1Click:Connect(function()
+		expanded = not expanded
+		Container.Visible = expanded
+		if expanded then
+			Button.Text = "[-]  " .. text
+		else
+			Button.Text = "[+]  " .. text
+		end
+	end)
 	
 	return Container
 end
@@ -558,7 +570,7 @@ local function ApplyHighlight(obj, isPlayerESP, isFriendly)
 		hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 		hl.FillTransparency = 0.5
 		hl.OutlineTransparency = 0
-		hl.Parent = obj -- Теперь обводка лежит прямо внутри объекта для большей безопасности
+		hl.Parent = obj 
 		storage[obj] = hl
 	end
 	
