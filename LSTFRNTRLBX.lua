@@ -40,9 +40,10 @@ local Connections = {}
 local Aimbot_ToggledOn = false
 
 local function IsTeam(player)
-	if player.Name == TARGET_FRIENDLY_NAME or player == LocalPlayer then
-		return true
-	end
+	if not player then return false end
+	if player == LocalPlayer then return true end
+	if player.Name == TARGET_FRIENDLY_NAME then return true end
+	if player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then return true end
 	return false
 end
 
@@ -52,7 +53,7 @@ local function GetAimPart(character)
 	if partName == "Torso" then
 		return character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
 	end
-	return character:FindFirstChild("Head")
+	return character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
 end
 
 local function ClearHighlightList(list)
@@ -513,7 +514,7 @@ end)
 
 local espSet = UIUtils.CreateMinitab(MainPage, "ESP Team settings")
 UIUtils.CreateToggle(espSet, "Show Enemies", _G_State.ESP_ShowEnemies, function(v) _G_State.ESP_ShowEnemies = v end)
-UIUtils.CreateToggle(espSet, "Show Team ("..TARGET_FRIENDLY_NAME..")", _G_State.ESP_ShowTeam, function(v) _G_State.ESP_ShowTeam = v end)
+UIUtils.CreateToggle(espSet, "Show Team", _G_State.ESP_ShowTeam, function(v) _G_State.ESP_ShowTeam = v end)
 UIUtils.CreateColorPicker(espSet, "Enemy Color", _G_State.ESP_EnemyColor, function(v) _G_State.ESP_EnemyColor = v end)
 UIUtils.CreateColorPicker(espSet, "Team Color", _G_State.ESP_TeamColor, function(v) _G_State.ESP_TeamColor = v end)
 
@@ -526,7 +527,10 @@ UIUtils.CreateToggle(MainPage, "FPV ESP (ignoreFolder__D)", _G_State.FPV_ESP_Ena
 end)
 
 local fpvSet = UIUtils.CreateMinitab(MainPage, "F-ESP Team settings")
-UIUtils.CreateColorPicker(fpvSet, "Object Highlight Color", _G_State.FPV_EnemyColor, function(v) _G_State.FPV_EnemyColor = v end)
+UIUtils.CreateToggle(fpvSet, "Show FPV Enemies", _G_State.FPV_ShowEnemies, function(v) _G_State.FPV_ShowEnemies = v end)
+UIUtils.CreateToggle(fpvSet, "Show FPV Team", _G_State.FPV_ShowTeam, function(v) _G_State.FPV_ShowTeam = v end)
+UIUtils.CreateColorPicker(fpvSet, "FPV Enemy Color", _G_State.FPV_EnemyColor, function(v) _G_State.FPV_EnemyColor = v end)
+UIUtils.CreateColorPicker(fpvSet, "FPV Team Color", _G_State.FPV_TeamColor, function(v) _G_State.FPV_TeamColor = v end)
 
 local spacer2 = Instance.new("Frame");
 spacer2.Size = UDim2.new(1,0,0,10); spacer2.BackgroundTransparency = 1; spacer2.Parent = MainPage
@@ -570,7 +574,7 @@ local function ApplyHighlight(obj, isPlayerESP, isFriendly)
 		hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 		hl.FillTransparency = 0.5
 		hl.OutlineTransparency = 0
-		hl.Parent = obj 
+		hl.Parent = obj
 		storage[obj] = hl
 	end
 	
@@ -585,9 +589,15 @@ local function ApplyHighlight(obj, isPlayerESP, isFriendly)
 			hl.Enabled = _G_State.ESP_ShowEnemies
 		end
 	else
-		hl.FillColor = _G_State.FPV_EnemyColor
-		hl.OutlineColor = Color3.new(1,1,1)
-		hl.Enabled = true
+		if isFriendly then
+			hl.FillColor = _G_State.FPV_TeamColor
+			hl.OutlineColor = Color3.new(1,1,1)
+			hl.Enabled = _G_State.FPV_ShowTeam
+		else
+			hl.FillColor = _G_State.FPV_EnemyColor
+			hl.OutlineColor = Color3.new(1,1,1)
+			hl.Enabled = _G_State.FPV_ShowEnemies
+		end
 	end
 	
 	if not obj.Parent then
@@ -617,10 +627,27 @@ Connections.ESP_Loop = RunService.Heartbeat:Connect(function()
 		if ignoreFolder then
 			for _, obj in pairs(ignoreFolder:GetChildren()) do
 				if obj:IsA("Model") or obj:IsA("BasePart") then
-					ApplyHighlight(obj, false, false)
+					local plr = Players:GetPlayerFromCharacter(obj) or Players:FindFirstChild(obj.Name)
+					
+					if plr == LocalPlayer then
+						local hl = FPV_Highlights[obj]
+						if hl then 
+							hl:Destroy()
+							FPV_Highlights[obj] = nil
+						end
+						continue
+					end
+					
+					local isFriendly = false
+					if plr then
+						isFriendly = IsTeam(plr)
+					end
+					
+					ApplyHighlight(obj, false, isFriendly)
 				end
 			end
 		end
+		
 		for obj, hl in pairs(FPV_Highlights) do
 			if not obj.Parent then
 				hl:Destroy()
@@ -635,17 +662,40 @@ local function GetClosestTarget()
 	local targetChar = nil
 	local targetPart = nil
 	
+	local validTargets = {}
+	
 	for _, player in pairs(Players:GetPlayers()) do
-		if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
-			
-			local isFriendly = IsTeam(player)
+		if player ~= LocalPlayer and player.Character then
+			validTargets[player.Character] = player
+		end
+	end
+	
+	local ignoreFolder = Workspace:FindFirstChild("ignoreFolder__D")
+	if ignoreFolder then
+		for _, obj in pairs(ignoreFolder:GetChildren()) do
+			if obj:IsA("Model") then
+				local plr = Players:GetPlayerFromCharacter(obj) or Players:FindFirstChild(obj.Name)
+				if plr ~= LocalPlayer then
+					validTargets[obj] = plr
+				end
+			end
+		end
+	end
+	
+	for char, plr in pairs(validTargets) do
+		local hum = char:FindFirstChild("Humanoid") or char:FindFirstChildWhichIsA("Humanoid")
+		if hum and hum.Health > 0 then
+			local isFriendly = false
+			if plr then
+				isFriendly = IsTeam(plr)
+			end
 			
 			local canTarget = false
 			if isFriendly and _G_State.Aimbot_TargetTeam then canTarget = true end
 			if not isFriendly and _G_State.Aimbot_TargetEnemies then canTarget = true end
 			
 			if canTarget then
-				local part = GetAimPart(player.Character)
+				local part = GetAimPart(char)
 				if part then
 					local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
 					
@@ -656,7 +706,7 @@ local function GetClosestTarget()
 						
 						if dist < closestDist then
 							closestDist = dist
-							targetChar = player.Character
+							targetChar = char
 							targetPart = part
 						end
 					end
@@ -664,13 +714,13 @@ local function GetClosestTarget()
 			end
 		end
 	end
+	
 	return targetPart
 end
 
 local aimbotActive = false
 
-Connections.AimInputBegan = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
+Connections.AimInputBegan = UserInputService.InputBegan:Connect(function(input)
 	if not _G_State.Aimbot_Enabled or not _G_State.WarningAccepted then return end
 	
 	if input.UserInputType == _G_State.Aimbot_Key or input.KeyCode == _G_State.Aimbot_Key then
@@ -696,7 +746,7 @@ Connections.Aimbot_Loop = RunService.RenderStepped:Connect(function()
 	if _G_State.Aimbot_Enabled and _G_State.WarningAccepted and aimbotActive then
 		local targetPart = GetClosestTarget()
 		if targetPart then
-			Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPart.Position)
+			Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPart.Position)
 		end
 	end
 end)
@@ -706,7 +756,6 @@ CloseBtn.MouseButton1Click:Connect(function()
 end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
 	if input.KeyCode == MENU_TOGGLE_KEY then
 		_G_State.MenuVisible = not _G_State.MenuVisible
 		MainFrame.Visible = _G_State.MenuVisible
