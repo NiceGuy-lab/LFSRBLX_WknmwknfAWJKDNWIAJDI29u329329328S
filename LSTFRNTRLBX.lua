@@ -29,6 +29,7 @@ local _G_State = {
 	Aimbot_TargetEnemies = true,
 	Aimbot_TargetTeam = false,
 	Aimbot_TargetFPV = false,
+	Aimbot_DropOffset = 0,
 	WarningAccepted = false
 }
 
@@ -369,6 +370,66 @@ function UIUtils.CreateToggle(parent, text, default, callback)
 	end)
 end
 
+function UIUtils.CreateSlider(parent, text, min, max, defaultVal, callback)
+	local Frame = Instance.new("Frame")
+	Frame.Size = UDim2.new(1, 0, 0, 45)
+	Frame.BackgroundTransparency = 1
+	Frame.Parent = parent
+	
+	local Label = Instance.new("TextLabel")
+	Label.Size = UDim2.new(1, -10, 0, 20)
+	Label.Position = UDim2.new(0, 5, 0, 0)
+	Label.BackgroundTransparency = 1
+	Label.Text = text .. ": " .. tostring(defaultVal)
+	Label.TextColor3 = Color3.fromRGB(200, 200, 200)
+	Label.Font = Enum.Font.Gotham
+	Label.TextSize = 13
+	Label.TextXAlignment = Enum.TextXAlignment.Left
+	Label.Parent = Frame
+	
+	local SliderBg = Instance.new("Frame")
+	SliderBg.Size = UDim2.new(1, -10, 0, 12)
+	SliderBg.Position = UDim2.new(0, 5, 0, 25)
+	SliderBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	AddUICorner(SliderBg, 6)
+	SliderBg.Parent = Frame
+	
+	local Fill = Instance.new("Frame")
+	local defPct = math.clamp((defaultVal - min) / (max - min), 0, 1)
+	Fill.Size = UDim2.new(defPct, 0, 1, 0)
+	Fill.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+	AddUICorner(Fill, 6)
+	Fill.Parent = SliderBg
+	
+	local dragging = false
+	
+	local function updateSlider(input)
+		local pos = math.clamp((input.Position.X - SliderBg.AbsolutePosition.X) / SliderBg.AbsoluteSize.X, 0, 1)
+		Fill.Size = UDim2.new(pos, 0, 1, 0)
+		local val = min + (max - min) * pos
+		val = math.floor(val * 10) / 10
+		Label.Text = text .. ": " .. tostring(val)
+		callback(val)
+	end
+	
+	SliderBg.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			updateSlider(input)
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			updateSlider(input)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+end
+
 function UIUtils.CreateMinitab(parent, text)
 	local Frame = Instance.new("Frame")
 	Frame.Size = UDim2.new(1, 0, 0, 25)
@@ -442,7 +503,7 @@ function UIUtils.CreateColorPicker(parent, text, defaultColor, callback)
 	
 	local currentR, currentG, currentB = defaultColor.R, defaultColor.G, defaultColor.B
 	
-	local function createSlider(yPos, colorName, defaultVal, cb)
+	local function createSliderLocal(yPos, colorName, defaultVal, cb)
 		local SliderFrame = Instance.new("Frame")
 		SliderFrame.Size = UDim2.new(1, -140, 0, 10)
 		SliderFrame.Position = UDim2.new(0, 130, 0, yPos)
@@ -480,9 +541,9 @@ function UIUtils.CreateColorPicker(parent, text, defaultColor, callback)
 		callback(newCol)
 	end
 	
-	createSlider(5, "R", currentR, function(v) currentR = v updateFinalColor() end)
-	createSlider(20, "G", currentG, function(v) currentG = v updateFinalColor() end)
-	createSlider(35, "B", currentB, function(v) currentB = v updateFinalColor() end)
+	createSliderLocal(5, "R", currentR, function(v) currentR = v updateFinalColor() end)
+	createSliderLocal(20, "G", currentG, function(v) currentG = v updateFinalColor() end)
+	createSliderLocal(35, "B", currentB, function(v) currentB = v updateFinalColor() end)
 end
 
 function UIUtils.CreateDropdown(parent, text, options, default, callback)
@@ -654,6 +715,10 @@ end)
 
 UIUtils.CreateDropdown(aimSet, "Target Part", {"Head", "Torso"}, "Head", function(v)
 	_G_State.Aimbot_TargetPart = v
+end)
+
+UIUtils.CreateSlider(aimSet, "Distance Drop Offset", -10, 10, 0, function(v)
+	_G_State.Aimbot_DropOffset = v
 end)
 
 UIUtils.CreateToggle(aimSet, "Target Enemies", _G_State.Aimbot_TargetEnemies, function(v) _G_State.Aimbot_TargetEnemies = v end)
@@ -884,7 +949,11 @@ Connections.Aimbot_Loop = RunService.RenderStepped:Connect(function()
 	if _G_State.Aimbot_Enabled and _G_State.WarningAccepted and aimbotActive then
 		local targetPart = GetClosestTarget()
 		if targetPart then
-			local pos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+			local distToTarget = (Camera.CFrame.Position - targetPart.Position).Magnitude
+			local offsetScale = (distToTarget * _G_State.Aimbot_DropOffset * 0.01)
+			local aimPos = targetPart.Position - Vector3.new(0, offsetScale, 0)
+			
+			local pos, onScreen = Camera:WorldToViewportPoint(aimPos)
 			if onScreen then
 				if type(mousemoverel) == "function" then
 					local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
@@ -892,7 +961,7 @@ Connections.Aimbot_Loop = RunService.RenderStepped:Connect(function()
 					local deltaY = pos.Y - center.Y
 					mousemoverel(deltaX * 0.4, deltaY * 0.4)
 				else
-					Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPart.Position)
+					Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, aimPos)
 				end
 			end
 		end
