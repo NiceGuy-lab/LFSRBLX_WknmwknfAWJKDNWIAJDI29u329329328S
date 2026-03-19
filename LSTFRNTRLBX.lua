@@ -39,11 +39,81 @@ local FPV_Highlights = {}
 local Connections = {}
 local Aimbot_ToggledOn = false
 
-local function IsTeam(player)
-	if not player then return false end
-	if player == LocalPlayer then return true end
-	if player.Name == TARGET_FRIENDLY_NAME then return true end
-	if player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then return true end
+local CachedMainFolder = nil
+local CachedMyTeamFolder = nil
+local LastCheckTime = 0
+
+local function UpdateTeamsFolders()
+	if tick() - LastCheckTime < 2 then return end
+	LastCheckTime = tick()
+	
+	local myName = LocalPlayer.Name
+	local myModel = LocalPlayer.Character
+	
+	if not myModel then
+		for _, folder in pairs(Workspace:GetChildren()) do
+			if folder:IsA("Folder") or folder:IsA("Model") then
+				for _, sub in pairs(folder:GetChildren()) do
+					if sub:IsA("Folder") or sub:IsA("Model") then
+						local char = sub:FindFirstChild(myName)
+						if char and char:IsA("Model") then
+							myModel = char
+							break
+						end
+					end
+				end
+			end
+			if myModel then break end
+		end
+	end
+	
+	if myModel and myModel.Parent and myModel.Parent ~= Workspace then
+		local p = myModel.Parent
+		if p.Parent and p.Parent.Parent == Workspace then
+			CachedMainFolder = p.Parent
+			CachedMyTeamFolder = p
+			return
+		end
+	end
+	
+	for _, folder in pairs(Workspace:GetChildren()) do
+		if folder:IsA("Folder") or folder:IsA("Model") then
+			local subs = folder:GetChildren()
+			if #subs >= 2 and #subs <= 5 then
+				for _, sub in pairs(subs) do
+					if myModel and sub:IsAncestorOf(myModel) then
+						CachedMainFolder = folder
+						CachedMyTeamFolder = sub
+						return
+					end
+					if sub:FindFirstChild(myName) then
+						CachedMainFolder = folder
+						CachedMyTeamFolder = sub
+						return
+					end
+				end
+			end
+		end
+	end
+end
+
+local function IsTeamSmart(obj)
+	if not obj then return false end
+	if LocalPlayer.Character and obj == LocalPlayer.Character then return true end
+	if obj.Name == LocalPlayer.Name then return true end
+	if obj.Name == TARGET_FRIENDLY_NAME then return true end
+	
+	if CachedMyTeamFolder then
+		if CachedMyTeamFolder:IsAncestorOf(obj) then return true end
+		local plr = Players:FindFirstChild(obj.Name)
+		if plr and plr.Character and CachedMyTeamFolder:IsAncestorOf(plr.Character) then
+			return true
+		end
+	end
+	
+	local plr = Players:FindFirstChild(obj.Name)
+	if plr and plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then return true end
+	
 	return false
 end
 
@@ -607,15 +677,39 @@ local function ApplyHighlight(obj, isPlayerESP, isFriendly)
 end
 
 Connections.ESP_Loop = RunService.Heartbeat:Connect(function()
+	UpdateTeamsFolders()
+	
 	if _G_State.ESP_Enabled then
-		for _, player in pairs(Players:GetPlayers()) do
-			if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-				ApplyHighlight(player.Character, true, IsTeam(player))
+		local allTargets = {}
+		
+		for _, plr in pairs(Players:GetPlayers()) do
+			if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+				table.insert(allTargets, plr.Character)
+			end
+		end
+		
+		if CachedMainFolder then
+			for _, sub in pairs(CachedMainFolder:GetChildren()) do
+				for _, char in pairs(sub:GetChildren()) do
+					if char:IsA("Model") and char ~= LocalPlayer.Character and char.Name ~= LocalPlayer.Name then
+						if char:FindFirstChild("HumanoidRootPart") or char:FindFirstChildWhichIsA("Humanoid") then
+							table.insert(allTargets, char)
+						end
+					end
+				end
+			end
+		end
+		
+		local seen = {}
+		for _, char in pairs(allTargets) do
+			if not seen[char] then
+				seen[char] = true
+				ApplyHighlight(char, true, IsTeamSmart(char))
 			end
 		end
 		
 		for char, hl in pairs(ESP_Highlights) do
-			if not char.Parent or not char:FindFirstChild("HumanoidRootPart") then
+			if not char.Parent or (not char:FindFirstChild("HumanoidRootPart") and not char:FindFirstChildWhichIsA("Humanoid")) then
 				hl:Destroy()
 				ESP_Highlights[char] = nil
 			end
@@ -625,11 +719,10 @@ Connections.ESP_Loop = RunService.Heartbeat:Connect(function()
 	if _G_State.FPV_ESP_Enabled then
 		local ignoreFolder = Workspace:FindFirstChild("ignoreFolder__D")
 		if ignoreFolder then
+			local myName = LocalPlayer.Name
 			for _, obj in pairs(ignoreFolder:GetChildren()) do
 				if obj:IsA("Model") or obj:IsA("BasePart") then
-					local plr = Players:GetPlayerFromCharacter(obj) or Players:FindFirstChild(obj.Name)
-					
-					if plr == LocalPlayer then
+					if obj.Name == myName or (LocalPlayer.Character and obj == LocalPlayer.Character) then
 						local hl = FPV_Highlights[obj]
 						if hl then 
 							hl:Destroy()
@@ -638,12 +731,7 @@ Connections.ESP_Loop = RunService.Heartbeat:Connect(function()
 						continue
 					end
 					
-					local isFriendly = false
-					if plr then
-						isFriendly = IsTeam(plr)
-					end
-					
-					ApplyHighlight(obj, false, isFriendly)
+					ApplyHighlight(obj, false, IsTeamSmart(obj))
 				end
 			end
 		end
@@ -666,29 +754,33 @@ local function GetClosestTarget()
 	
 	for _, player in pairs(Players:GetPlayers()) do
 		if player ~= LocalPlayer and player.Character then
-			validTargets[player.Character] = player
+			validTargets[player.Character] = true
+		end
+	end
+	
+	if CachedMainFolder then
+		for _, sub in pairs(CachedMainFolder:GetChildren()) do
+			for _, char in pairs(sub:GetChildren()) do
+				if char:IsA("Model") and char ~= LocalPlayer.Character and char.Name ~= LocalPlayer.Name then
+					validTargets[char] = true
+				end
+			end
 		end
 	end
 	
 	local ignoreFolder = Workspace:FindFirstChild("ignoreFolder__D")
 	if ignoreFolder then
 		for _, obj in pairs(ignoreFolder:GetChildren()) do
-			if obj:IsA("Model") then
-				local plr = Players:GetPlayerFromCharacter(obj) or Players:FindFirstChild(obj.Name)
-				if plr ~= LocalPlayer then
-					validTargets[obj] = plr
-				end
+			if obj:IsA("Model") and obj.Name ~= LocalPlayer.Name then
+				validTargets[obj] = true
 			end
 		end
 	end
 	
-	for char, plr in pairs(validTargets) do
+	for char, _ in pairs(validTargets) do
 		local hum = char:FindFirstChild("Humanoid") or char:FindFirstChildWhichIsA("Humanoid")
 		if hum and hum.Health > 0 then
-			local isFriendly = false
-			if plr then
-				isFriendly = IsTeam(plr)
-			end
+			local isFriendly = IsTeamSmart(char)
 			
 			local canTarget = false
 			if isFriendly and _G_State.Aimbot_TargetTeam then canTarget = true end
