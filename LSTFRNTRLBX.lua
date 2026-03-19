@@ -41,12 +41,8 @@ local Aimbot_ToggledOn = false
 
 local CachedMainFolder = nil
 local CachedMyTeamFolder = nil
-local LastCheckTime = 0
 
 local function UpdateTeamsFolders()
-	if tick() - LastCheckTime < 2 then return end
-	LastCheckTime = tick()
-	
 	local myName = LocalPlayer.Name
 	local myModel = LocalPlayer.Character
 	
@@ -96,6 +92,8 @@ local function UpdateTeamsFolders()
 		end
 	end
 end
+
+UpdateTeamsFolders()
 
 local function IsTeamSmart(obj)
 	if not obj then return false end
@@ -310,6 +308,31 @@ function UIUtils.CreateTab(name, layoutOrder)
 	return Page
 end
 
+function UIUtils.CreateButton(parent, text, callback)
+	local Frame = Instance.new("Frame")
+	Frame.Size = UDim2.new(1, 0, 0, 30)
+	Frame.BackgroundTransparency = 1
+	Frame.Parent = parent
+	
+	local Button = Instance.new("TextButton")
+	Button.Size = UDim2.new(1, 0, 1, -4)
+	Button.Position = UDim2.new(0, 0, 0, 2)
+	Button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	Button.Text = text
+	Button.TextColor3 = Color3.fromRGB(200, 200, 200)
+	Button.Font = Enum.Font.Gotham
+	Button.TextSize = 13
+	AddUICorner(Button, 4)
+	Button.Parent = Frame
+	
+	Button.MouseButton1Click:Connect(function()
+		TweenService:Create(Button, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}):Play()
+		callback()
+		task.wait(0.1)
+		TweenService:Create(Button, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(40, 40, 40)}):Play()
+	end)
+end
+
 function UIUtils.CreateToggle(parent, text, default, callback)
 	local Frame = Instance.new("Frame")
 	Frame.Size = UDim2.new(1, 0, 0, 30)
@@ -353,7 +376,7 @@ function UIUtils.CreateMinitab(parent, text)
 	Button.Size = UDim2.new(1, 0, 1, 0)
 	Button.Position = UDim2.new(0, 5, 0, 0)
 	Button.BackgroundTransparency = 1
-	Button.Text = "[-]  " .. text
+	Button.Text = "[+]  " .. text
 	Button.TextColor3 = Color3.fromRGB(180, 180, 180)
 	Button.Font = Enum.Font.GothamBold
 	Button.TextSize = 12
@@ -365,6 +388,7 @@ function UIUtils.CreateMinitab(parent, text)
 	Container.Size = UDim2.new(1, 0, 0, 0)
 	Container.AutomaticSize = Enum.AutomaticSize.Y
 	Container.BackgroundTransparency = 1
+	Container.Visible = false
 	Container.Parent = parent
 	
 	local list = Instance.new("UIListLayout")
@@ -375,7 +399,7 @@ function UIUtils.CreateMinitab(parent, text)
 	pad.PaddingLeft = UDim.new(0, 10)
 	pad.Parent = Container
 	
-	local expanded = true
+	local expanded = false
 	Button.MouseButton1Click:Connect(function()
 		expanded = not expanded
 		Container.Visible = expanded
@@ -588,8 +612,8 @@ UIUtils.CreateToggle(espSet, "Show Team", _G_State.ESP_ShowTeam, function(v) _G_
 UIUtils.CreateColorPicker(espSet, "Enemy Color", _G_State.ESP_EnemyColor, function(v) _G_State.ESP_EnemyColor = v end)
 UIUtils.CreateColorPicker(espSet, "Team Color", _G_State.ESP_TeamColor, function(v) _G_State.ESP_TeamColor = v end)
 
-local spacer = Instance.new("Frame");
-spacer.Size = UDim2.new(1,0,0,10); spacer.BackgroundTransparency = 1; spacer.Parent = MainPage
+local spacer = Instance.new("Frame")
+spacer.Size = UDim2.new(1,0,0,10) spacer.BackgroundTransparency = 1 spacer.Parent = MainPage
 
 UIUtils.CreateToggle(MainPage, "FPV ESP (ignoreFolder__D)", _G_State.FPV_ESP_Enabled, function(v)
 	_G_State.FPV_ESP_Enabled = v
@@ -602,8 +626,8 @@ UIUtils.CreateToggle(fpvSet, "Show FPV Team", _G_State.FPV_ShowTeam, function(v)
 UIUtils.CreateColorPicker(fpvSet, "FPV Enemy Color", _G_State.FPV_EnemyColor, function(v) _G_State.FPV_EnemyColor = v end)
 UIUtils.CreateColorPicker(fpvSet, "FPV Team Color", _G_State.FPV_TeamColor, function(v) _G_State.FPV_TeamColor = v end)
 
-local spacer2 = Instance.new("Frame");
-spacer2.Size = UDim2.new(1,0,0,10); spacer2.BackgroundTransparency = 1; spacer2.Parent = MainPage
+local spacer2 = Instance.new("Frame")
+spacer2.Size = UDim2.new(1,0,0,10) spacer2.BackgroundTransparency = 1 spacer2.Parent = MainPage
 
 UIUtils.CreateToggle(MainPage, "AIMBOT", _G_State.Aimbot_Enabled, function(v)
 	_G_State.Aimbot_Enabled = v
@@ -633,6 +657,12 @@ end)
 
 UIUtils.CreateToggle(aimSet, "Target Enemies", _G_State.Aimbot_TargetEnemies, function(v) _G_State.Aimbot_TargetEnemies = v end)
 UIUtils.CreateToggle(aimSet, "Target Team", _G_State.Aimbot_TargetTeam, function(v) _G_State.Aimbot_TargetTeam = v end)
+
+local ConfigPage = UIUtils.CreateTab("Configure", 2)
+
+UIUtils.CreateButton(ConfigPage, "Reload Teams", function()
+	UpdateTeamsFolders()
+end)
 
 local function ApplyHighlight(obj, isPlayerESP, isFriendly)
 	local storage = isPlayerESP and ESP_Highlights or FPV_Highlights
@@ -677,8 +707,6 @@ local function ApplyHighlight(obj, isPlayerESP, isFriendly)
 end
 
 Connections.ESP_Loop = RunService.Heartbeat:Connect(function()
-	UpdateTeamsFolders()
-	
 	if _G_State.ESP_Enabled then
 		local allTargets = {}
 		
@@ -838,7 +866,17 @@ Connections.Aimbot_Loop = RunService.RenderStepped:Connect(function()
 	if _G_State.Aimbot_Enabled and _G_State.WarningAccepted and aimbotActive then
 		local targetPart = GetClosestTarget()
 		if targetPart then
-			Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPart.Position)
+			local pos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+			if onScreen then
+				if type(mousemoverel) == "function" then
+					local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+					local deltaX = pos.X - center.X
+					local deltaY = pos.Y - center.Y
+					mousemoverel(deltaX * 0.4, deltaY * 0.4)
+				else
+					Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPart.Position)
+				end
+			end
 		end
 	end
 end)
